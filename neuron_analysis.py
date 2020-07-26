@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.stats import kruskal
+import matplotlib.pyplot as plt
 
 
 def get_contrast_modulation(spikes, contrast):
@@ -29,11 +30,21 @@ def get_contrast_modulation(spikes, contrast):
     test_stats = np.zeros((mean_fr.shape[0], 2))
     for neuron in range(mean_fr.shape[0]):
 
+        # neuron=132
         # Sort trials into one of 4 np.arrays in the list 'fr_per_cont' according to contrast condition
         fr_per_cont = []
+        cont_label = []
         for c in np.unique(contrast):
             curr_mask = contrast == c
             fr_per_cont.append(mean_fr[neuron, curr_mask])
+            cont_label.extend([f'{int(c*100)}%']*sum(curr_mask))
+
+        df = pd.DataFrame(data={'fr': np.hstack(fr_per_cont), 'contrast': cont_label})
+
+        # plt.figure()
+        # plt.title(f'Neuron {neuron}')
+        # sns.barplot(data=df, x='contrast', y='fr')
+        # sns.swarmplot(data=df, x='contrast', y='fr', color='0', alpha=0.35)
 
         # Perform Kruskal-Wallis test and use 'H' statistic to compute fraction of variance explained
         try:
@@ -44,18 +55,15 @@ def get_contrast_modulation(spikes, contrast):
         except ValueError:
             test_stats[neuron] = np.array([1, 0])
 
+
     # Return test statistics for every neuron:
     # Kruskal-Wallis p-value (1st column) and fraction of explained variance (2nd column)
     return test_stats
 
-    # df2 = pd.DataFrame(data={'fr': np.hstack(fr_per_cont), 'contrast': cont_label})
-    #
-    # plt.figure()
-    # plt.title(f'Neuron {neuron}')
-    # sns.barplot(data=df2, x='contrast', y='fr')
-    # _, bins = np.histogram(df2["fr"])
-    # g = sns.FacetGrid(df2, hue="contrast")
-    # g = (g.map(sns.distplot, "fr", bins=bins, hist=False).add_legend())
+
+        # _, bins = np.histogram(df2["fr"])
+        # g = sns.FacetGrid(df2, hue="contrast")
+        # g = (g.map(sns.distplot, "fr", bins=bins, hist=False).add_legend())
     #
     #
     #

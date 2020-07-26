@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import neuron_analysis as ana
 
 #%% Data I/O
 def download_data(target=r'C:\Users\Hendrik\PycharmProjects\nma_project\data'):
@@ -109,21 +110,23 @@ def survey_contrast_modulation(data, thresh_p=0.05, thresh_var=0.05):
     for sess_idx, session in enumerate(data):
         for region in np.unique(session['brain_area']):
             spikes, pupil_area, contrast = filter_data(data, session=sess_idx, areas=str(region), inverse=False)
-            results = get_contrast_modulation(spikes, contrast)
+            results = ana.get_contrast_modulation(spikes, contrast)
             df_list.append(pd.DataFrame(data={'frac_p': [(sum(results[:, 0] < thresh_p)/len(results))*100],
                                               'frac_var': [(sum(results[:, 1] > thresh_var)/len(results))*100],
                                               'area': str(region)}))
     df = pd.concat(df_list)
 
-sns.set_style('whitegrid')
-sns.set_context('notebook')
-fig, ax = plt.subplots(2, 1, sharex=True, sharey=True)
-out = sns.barplot(data=df, x='area', y='frac_p', order=np.unique(df['area']), ax=ax[0])
-out = sns.barplot(data=df, x='area', y='frac_var', order=np.unique(df['area']), ax=ax[1])
-for item in ax[1].get_xticklabels():
-    item.set_rotation(45)
-ax[0].set_ylabel('Contrast-modulated cells\nby p-value [%]', fontsize=15)
-ax[1].set_ylabel('Contrast-modulated cells\nby explained variance [%]', fontsize=15)
-ax[0].set_xlabel('')
+    pd_df = df.sort_values('frac_p', ascending=False).reset_index()
 
-print(f'{(sum(results[:, 1]>0.14)/len(results))*100}% of neurons are contrast modulated')
+    sns.set_style('whitegrid')
+    sns.set_context('notebook')
+    fig, ax = plt.subplots(2, 1, sharex=True, sharey=True)
+    out = sns.barplot(data=pd_df, x='area', y='frac_p', ax=ax[0])
+    out = sns.barplot(data=pd_df, x='area', y='frac_var', ax=ax[1])
+    for item in ax[1].get_xticklabels():
+        item.set_rotation(45)
+    ax[0].set_ylabel('Contrast-modulated cells\nby p-value [%]', fontsize=15)
+    ax[1].set_ylabel('Contrast-modulated cells\nby explained variance [%]', fontsize=15)
+    ax[0].set_xlabel('')
+#
+# print(f'{(sum(results[:, 1]>0.14)/len(results))*100}% of neurons are contrast modulated')
