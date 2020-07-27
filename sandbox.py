@@ -8,7 +8,7 @@ import seaborn as sns
 
 #%%
 data = dm.load_data()
-spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(25,45))
+spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(50, 150))
 results = ana.get_contrast_modulation(spikes, contrast)
 
 neuron_id = 8
@@ -83,3 +83,28 @@ df3 = pd.DataFrame({'pupil': np.hstack([pupil_low, pupil_high]),
                     'percentiles': perc_labels})
 
 plt.figure(); sns.swarmplot(x='contrast', y='pupil', hue='percentiles', data=df3)
+
+#%% PVC
+
+# Try out different time bins
+start_bin = 50
+end_bin = 150
+bin_size = 25
+bins = np.arange(start_bin, end_bin+1, bin_size)
+
+fig = plt.figure()
+lines = []
+labels = []
+for i in range(len(bins)):
+    if i == 0:
+        spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(min(bins), max(bins)))
+        labels.append('total')
+    else:
+        spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(bins[i-1], bins[i]))
+        labels.append((bins[i - 1], bins[i]))
+    y, std = ana.population_vector_correlation(spikes, contrast)
+    fig, line = ana.plot_pvc_curve(y, std, fig=fig)
+    lines.append(line)
+
+plt.legend(lines, labels)
+

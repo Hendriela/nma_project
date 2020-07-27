@@ -68,3 +68,97 @@ def get_contrast_modulation(spikes, contrast):
     #
     #
     # sns.distplot(df2['fr'])
+
+
+def population_vector_correlation(spikes, contrast, plot=False, fig=None):
+
+    # Get avg firing rate for each trial
+    mean_fr = np.sum(spikes, axis=2)/(spikes.shape[2]/100)
+
+    # Average firing rates across contrast condition trials
+    contrasts = np.unique(contrast)
+    activity_matrix = np.zeros((len(contrasts), mean_fr.shape[0]))
+    for idx, cont in enumerate(contrasts):
+        mask = contrast == cont
+        activity_matrix[idx] = np.mean(mean_fr[:, mask], axis=1)
+
+    y, std = pvc_curve(activity_matrix, plot=False)
+
+    if plot:
+        if fig is None:
+            fig = plt.figure()
+        out = plot_pvc_curve(y, std, fig=fig)
+
+    return y, std
+
+
+def pvc_curve(activity_matrix, plot=True):
+    """Calculate the mean pvc curve
+
+        Parameters
+        ----------
+        activity_matrix : 2D array containing (float, dim1 = bins, dim2 = neurons)
+        plot: bool, optional
+        max_delta_bins: int, optional
+            max difference in bin distance
+
+       Returns
+       -------
+       curve_yvals:
+           array of mean pvc curve (idx = delta_bin)
+    """
+    max_delta_bins = activity_matrix.shape[0]-1
+    num_bins = np.size(activity_matrix,0)
+    num_neurons = np.size(activity_matrix,1)
+    curve_yvals = np.empty(max_delta_bins + 1)
+    curve_stdev = np.empty(max_delta_bins + 1)
+    for delta_bin in range(max_delta_bins + 1):
+        pvc_vals = []
+        for offset in range(num_bins - delta_bin):
+            idx_x = offset
+            idx_y = offset + delta_bin
+            pvc_xy_num = pvc_xy_den_term1 = pvc_xy_den_term2 = 0
+            for neuron in range(num_neurons):
+                pvc_xy_num += activity_matrix[idx_x][neuron] * activity_matrix[idx_y][neuron]
+                pvc_xy_den_term1 += activity_matrix[idx_x][neuron]*activity_matrix[idx_x][neuron]
+                pvc_xy_den_term2 += activity_matrix[idx_y][neuron]*activity_matrix[idx_y][neuron]
+            pvc_xy = pvc_xy_num / (np.sqrt(pvc_xy_den_term1*pvc_xy_den_term2))
+            pvc_vals.append(pvc_xy)
+        mean_pvc_delta_bin = np.mean(pvc_vals)
+        stdev_delta_bin = np.std(pvc_vals)
+        curve_yvals[delta_bin] = mean_pvc_delta_bin
+        curve_stdev[delta_bin] = stdev_delta_bin
+
+    if plot:
+        plot_pvc_curve(curve_yvals, curve_stdev, show=False)
+
+    return curve_yvals, curve_stdev
+
+
+def plot_pvc_curve(y_vals, session_stdev, show=False, fig=None):
+    """Plots the pvc curve
+
+        Parameters
+        ----------
+        y_vals : array-like
+            data points of the pvc curve (idx = bin distance)
+        bin_size : bool, optional
+        show : bool, optional
+
+       Returns
+       -------
+       fig: figure object
+           a figure object of the pvc curve
+    """
+    if fig is None:
+        fig = plt.figure()
+    x_axis = np.arange(4)
+    line, _, _ = plt.errorbar(x_axis, y_vals, session_stdev, figure=fig)
+    plt.fill_between(x_axis, y_vals - session_stdev, y_vals + session_stdev, alpha=0.3)
+    plt.xticks(x_axis, labels=[0, 25, 50, 100])
+    # plt.ylim(bottom=0.5);
+    plt.ylabel('Mean PVC')
+    plt.xlim(left=0); plt.xlabel('Contrast [%]')
+    if show:
+        plt.show(block=True)
+    return fig, line
