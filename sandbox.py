@@ -86,6 +86,12 @@ plt.figure(); sns.swarmplot(x='contrast', y='pupil', hue='percentiles', data=df3
 
 #%% PVC
 
+# Plot one matrix
+spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(50, 75))
+act_mat = ana.population_vector_matrix(spikes, contrast)
+mat = ana.pvc_matrix(act_mat)
+ana.plot_pvc_matrix(mat)
+
 # Try out different time bins
 start_bin = 50
 end_bin = 150
@@ -93,6 +99,7 @@ bin_size = 25
 bins = np.arange(start_bin, end_bin+1, bin_size)
 
 fig = plt.figure()
+ax = plt.gca()
 lines = []
 labels = []
 for i in range(len(bins)):
@@ -103,8 +110,64 @@ for i in range(len(bins)):
         spikes, pupil, contrast = dm.filter_data(data, session=21, areas=['all_vis'], time_bins=(bins[i-1], bins[i]))
         labels.append((bins[i - 1], bins[i]))
     y, std = ana.population_vector_correlation(spikes, contrast)
-    fig, line = ana.plot_pvc_curve(y, std, fig=fig)
+    line = ana.plot_pvc_curve(y, std, ax=ax)
     lines.append(line)
 
 plt.legend(lines, labels)
 
+
+# Try out different time bins across different regions and sessions
+start_bin = 50
+end_bin = 150
+bin_size = 25
+bins = np.arange(start_bin, end_bin+1, bin_size)
+
+regions = ['VISp', 'MOp', 'LD', 'RT', 'ZI']
+fig, ax = plt.subplots(2, len(regions), sharey='row')
+
+for idx, reg in enumerate(regions):
+    lines = []
+    labels = []
+    for i in range(len(bins)):
+        y_sess = []
+        y_std = []
+        mats = []
+        for sess in range(len(data)):
+            if i == 0:
+                spikes, pupil, contrast = dm.filter_data(data, session=sess, areas=[reg], time_bins=(min(bins), max(bins)))
+                if len(spikes) == 0:
+                    continue
+            else:
+                spikes, pupil, contrast = dm.filter_data(data, session=sess, areas=[reg], time_bins=(bins[i-1], bins[i]))
+                if len(spikes) == 0:
+                    continue
+
+            # Potential: only take contrast modulated neurons (>5% variance)
+            # cont_modulation = ana.get_contrast_modulation(spikes, contrast)
+            # cont_mask = cont_modulation[:, 1] > 0.05
+            # if sum(cont_mask) == 0:
+            #     continue
+            # spikes = spikes[cont_mask]
+            y, std = ana.population_vector_correlation(spikes, contrast)
+            y_sess.append(y)
+            y_std.append(std)
+            mats.append(ana.population_vector_matrix(spikes, contrast))
+
+        y = np.mean(np.stack(y_sess, axis=0), axis=0)
+        std = np.std(np.stack(y_std, axis=0), axis=0)
+        line = ana.plot_pvc_curve(y, std, ax=ax[0, idx])
+
+        if (reg=='VISp' and i == 1) or (reg=='MOp' and i == 2) or (reg=='LD' and i == 1) or (reg=='RT' and i == 1) or (reg=='ZI' and i == 3):
+            mat = ana.pvc_matrix(np.hstack(mats))
+            ana.plot_pvc_matrix(mat, ax=ax[1, idx])
+            ax[1, idx].title.set_text(f'CorrMat for timebin {(bins[i-1], bins[i])}')
+
+        lines.append(line)
+        if i == 0:
+            labels.append('total')
+        else:
+            labels.append((bins[i - 1], bins[i]))
+        ax[0, idx].title.set_text(f'{reg} ({len(y_sess)} sess)')
+
+    if idx == len(regions)-1:
+        ax[0, idx].legend(lines, labels)

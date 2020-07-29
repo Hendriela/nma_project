@@ -102,6 +102,67 @@ def filter_data(data, session, areas, time_bins=(50, 150), inverse=False):
 
     return spikes, pupil_area, contrast
 
+
+def find_interesting_sessions(tar_area_name, alldat, sorter="neurons"):
+  """
+  Takes the original data and the area of interest to find all sessions that
+  have electrodes in that area. The return value are the indeces of those
+  sessions sorted (descending) by number of neurons in that area or sorted by
+  number of contrast condition trials.
+
+  Args:
+    tar_area_name (string): name of a target brain area like "VISpm"
+    alldat (np.array of dicts): np.array containing all session dicts (alldat)
+    sorter (string): possible values are "neurons" and "trials" - defines if the
+        sesssion indeces should be sorted for many neurons or many
+        trials
+
+  Returns:
+    session_indeces_sorted (np.array of int): Indexes for sessions with
+         neurons recorded in relevant brain areas sorted in descending order of
+         how many such neurons the session has or sorted in descending order of how
+         many contrast trials it had.
+
+  Paul (21.07.2020)
+  """
+  # allocate
+  session_indeces, num_of_neurons, num_of_contrast_trials = [], [], []
+
+  # iterate through sessions and save index of neurons in tar_area as tar_area_ind
+  for i in range(len(alldat)):
+    dat = alldat[i]
+    all_areas = dat['brain_area']
+    tar_area_ind = np.where(all_areas == tar_area_name)[0][:]
+
+    # if there are neurons of interest, append session index to session_indeces,
+    # append number of neurons to num_of_neurons and append number of trials to
+    # num_of_contrast_trials
+    if np.count_nonzero(tar_area_ind) > 0 :
+      session_indeces = np.hstack((session_indeces, i)).astype(int)
+      num_of_neurons = np.hstack((num_of_neurons,
+                                  len(np.where(all_areas == tar_area_name)[0][:]))).astype(int)
+      num_of_contrast_trials = np.hstack((num_of_contrast_trials,
+                                          len([contrast for contrast in dat['contrast_right'] if contrast == 0.00])))
+
+  # check if any neurons were found in all sessions
+  if np.count_nonzero(num_of_neurons) > 0 :
+
+    # depending on sorter value, sort seesion_indeces either for number of trials
+    # or number of neurons
+    if sorter == "neurons":
+      sorted_ind = np.argsort(num_of_neurons)[::-1]
+      session_indeces_sorted = session_indeces[sorted_ind]
+
+    elif sorter == "trials":
+      sorted_ind = np.argsort(num_of_contrast_trials)[::-1]
+      session_indeces_sorted = session_indeces[sorted_ind]
+
+    return session_indeces_sorted
+
+  # throw error if no neurons could be found at all
+  else:
+    print("no neurons found for " + tar_area_name)
+
 #%%
 
 def survey_contrast_modulation(data, thresh_p=0.05, thresh_var=0.05):

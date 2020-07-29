@@ -92,6 +92,20 @@ def population_vector_correlation(spikes, contrast, plot=False, fig=None):
     return y, std
 
 
+def population_vector_matrix(spikes, contrast):
+
+    # Get avg firing rate for each trial
+    mean_fr = np.sum(spikes, axis=2)/(spikes.shape[2]/100)
+
+    # Average firing rates across contrast condition trials
+    contrasts = np.unique(contrast)
+    activity_matrix = np.zeros((len(contrasts), mean_fr.shape[0]))
+    for idx, cont in enumerate(contrasts):
+        mask = contrast == cont
+        activity_matrix[idx] = np.mean(mean_fr[:, mask], axis=1)
+    return activity_matrix
+
+
 def pvc_curve(activity_matrix, plot=True):
     """Calculate the mean pvc curve
 
@@ -134,8 +148,45 @@ def pvc_curve(activity_matrix, plot=True):
 
     return curve_yvals, curve_stdev
 
+def pvc_matrix(activity_matrix):
+    """Calculate the mean pvc matrix
 
-def plot_pvc_curve(y_vals, session_stdev, show=False, fig=None):
+        Parameters
+        ----------
+        activity_matrix : 2D array containing (float, dim1 = bins, dim2 = neurons)
+        plot: bool, optional
+        max_delta_bins: int, optional
+            max difference in bin distance
+
+       Returns
+       -------
+       curve_yvals:
+           array of mean pvc curve (idx = delta_bin)
+    """
+    max_delta_bins = activity_matrix.shape[0]-1
+    num_bins = np.size(activity_matrix,0)
+    num_neurons = np.size(activity_matrix,1)
+    mat = np.empty((max_delta_bins + 1, max_delta_bins + 1))
+    for delta_bin in range(max_delta_bins + 1):
+        pvc_vals = []
+        for offset in range(num_bins - delta_bin):
+            idx_x = offset
+            idx_y = offset + delta_bin
+            pvc_xy_num = pvc_xy_den_term1 = pvc_xy_den_term2 = 0
+            for neuron in range(num_neurons):
+                pvc_xy_num += activity_matrix[idx_x][neuron] * activity_matrix[idx_y][neuron]
+                pvc_xy_den_term1 += activity_matrix[idx_x][neuron]*activity_matrix[idx_x][neuron]
+                pvc_xy_den_term2 += activity_matrix[idx_y][neuron]*activity_matrix[idx_y][neuron]
+            pvc_xy = pvc_xy_num / (np.sqrt(pvc_xy_den_term1*pvc_xy_den_term2))
+            mat[idx_x, idx_y] = pvc_xy
+    mat = np.triu(mat)
+    mat = mat + mat.T - np.diag(np.diag(mat))
+    mat = np.tril(mat)
+
+    return mat
+
+
+def plot_pvc_curve(y_vals, session_stdev, show=False, ax=None):
     """Plots the pvc curve
 
         Parameters
@@ -150,15 +201,63 @@ def plot_pvc_curve(y_vals, session_stdev, show=False, fig=None):
        fig: figure object
            a figure object of the pvc curve
     """
-    if fig is None:
+    if ax is None:
         fig = plt.figure()
+        ax = plt.gca()
+
     x_axis = np.arange(4)
-    line, _, _ = plt.errorbar(x_axis, y_vals, session_stdev, figure=fig)
-    plt.fill_between(x_axis, y_vals - session_stdev, y_vals + session_stdev, alpha=0.3)
-    plt.xticks(x_axis, labels=[0, 25, 50, 100])
+    line, _, _ = ax.errorbar(x_axis, y_vals, session_stdev)
+    ax.fill_between(x_axis, y_vals - session_stdev, y_vals + session_stdev, alpha=0.3)
+    ax.set_xticks(x_axis)
+    ax.set_xticklabels([0, 1, 2, 3])
     # plt.ylim(bottom=0.5);
-    plt.ylabel('Mean PVC')
-    plt.xlim(left=0); plt.xlabel('Contrast [%]')
+    ax.set_ylabel('Mean PVC')
+    ax.set_xlim(left=0)
+    ax.set_xlabel('Contrast steps apart')
+
     if show:
         plt.show(block=True)
-    return fig, line
+    if ax is None:
+        return fig, line
+    else:
+        return line
+
+def plot_pvc_matrix(mat, show=False, ax=None):
+    """Plots the pvc curve
+
+        Parameters
+        ----------
+        y_vals : array-like
+            data points of the pvc curve (idx = bin distance)
+        bin_size : bool, optional
+        show : bool, optional
+
+       Returns
+       -------
+       fig: figure object
+           a figure object of the pvc curve
+    """
+    if ax is None:
+        fig = plt.figure()
+        ax = plt.gca()
+
+    # Draw matrix
+    ax.matshow(mat, cmap='gnuplot')
+
+    # Put labels into matrix entries
+    for (i, j), z in np.ndenumerate(mat):
+        if z != 0:
+            ax.text(j, i, '{:0.2f}'.format(z), ha='center', va='center',
+                    bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+
+    ax.set_ylabel('Contrast [%]')
+    ax.set_yticklabels(['-1', '0', '25', '50', '100'])
+    ax.set_xlabel('Contrast [%]')
+    ax.xaxis.set_label_position('bottom')
+    ax.xaxis.set_ticks_position('bottom')
+    ax.set_xticklabels(['-1', '0', '25', '50', '100'])
+
+    if show:
+        plt.show(block=True)
+    if ax is None:
+        return fig
